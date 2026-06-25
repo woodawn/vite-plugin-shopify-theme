@@ -62,7 +62,7 @@ vite build    # 生产：产物入 <theme>/assets，并改写注入 vite-mixer s
 
 | 插件 | 生效阶段 | 作用 |
 | --- | --- | --- |
-| `shopify-theme:check` | dev（`apply: 'serve'`） | 校验主题仓库 git 分支前缀（默认 `["dev"]`，任一命中即通过），不符即抛 `branch error`；`vite build` 不加载本插件 |
+| `shopify-theme:check` | dev（`apply: 'serve'`） | 校验主题仓库 git 分支前缀（默认 `["dev"]`，任一命中即通过），不符即抛 `[shopify-theme]` 前缀错误阻断启动；`vite build` 不加载本插件 |
 | `shopify-theme:config` | dev + build | `config` 钩子解析选项、填充 `Ctx`，注入 `build`：`outDir = <theme>/assets`、单入口 `vite-mixer` |
 | `shopify-theme:reload` | dev（`apply: 'serve'`） | 复用 Vite 自带 `server.watcher` 监听主题源码目录，文件变更触发整页 `full-reload`（liquid 不走 HMR） |
 | `shopify-theme:mixer` | dev + build | 生成 / 改写 `vite-mixer.liquid`：dev `configureServer` 写 dev script，build `generateBundle` 读 bundle 元数据写生产 tag |

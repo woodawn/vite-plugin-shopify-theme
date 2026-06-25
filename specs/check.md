@@ -21,14 +21,14 @@
 
 ## 输出与副作用
 
-- 无文件写入。仅**读** `<themePath>/.git/HEAD`（[check.ts:25-26](../src/plugins/check.ts)）。
+- 无文件写入。仅**读** git 元数据：先定位 `.git`（目录直接用，文件则解析 `gitdir:` 重定向），再读其中的 `HEAD`（[check.ts:34-64](../src/plugins/check.ts)）。
 - 校验失败 → `throw new Error(...)`，中止 dev 启动。
 
-## 校验逻辑（[check.ts:24-39](../src/plugins/check.ts)）
+## 校验逻辑（[check.ts:25-64](../src/plugins/check.ts)）
 
-1. 读 `<themePath>/.git/HEAD` 并 `trim()`。
-2. 若以 `"ref: refs/heads/"` 开头（正常在分支上）→ 剥离该前缀取**完整分支名**（分支名本身可含 `/`，如 `dev/foo`，故不能 `split("/")` 取末段）；若**不以任一** `branches` 前缀开头 → 抛 `branch error: current: <x>, need: <p1 | p2 | …>`。
-3. 否则（HEAD 不是分支 ref，通常是 detached HEAD / 裸 commit）→ 抛 `branch error: Git branch is not exist`。
+1. 定位 git 目录（[check.ts:48-64](../src/plugins/check.ts)）：`<themePath>/.git` 为目录直接用；为文件则解析 `gitdir: <path>` 重定向（linked worktree / submodule，path 可相对 `repoPath`）；`.git` 缺失 / 形态异常 → 抛 `[shopify-theme] dev branch check failed: no git repo …`（或 `… malformed .git file …`）。
+2. 读该 git 目录下的 `HEAD` 并 `trim()`。若以 `"ref: refs/heads/"` 开头（正常在分支上）→ 剥离该前缀取**完整分支名**（分支名本身可含 `/`，如 `dev/foo`，故不能 `split("/")` 取末段）；若**不以任一** `branches` 前缀开头 → 抛 `[shopify-theme] dev branch check failed: current "<x>", need <p1 | p2 | …>`。
+3. 否则（HEAD 不是分支 ref，通常是 detached HEAD / 裸 commit）→ 抛 `[shopify-theme] dev branch check failed: not on a branch at <themePath>`。
 
 ## 不变量
 
@@ -39,13 +39,13 @@
 
 ## 设计决策与理由
 
-- **为什么直接读 `.git/HEAD` 而非跑 `git` 命令** —— 轻量、无子进程、不依赖 PATH 里的 git；分支名解析对 HEAD 文件格式而言足够。
+- **为什么直接读 `HEAD` 而非跑 `git` 命令** —— 轻量、无子进程、不依赖 PATH 里的 git；分支名解析对 HEAD 文件格式而言足够（`.git` 为文件时先解析 `gitdir:` 重定向再读）。
 - **为什么 `apply:'serve'`** —— 校验只对「即将连店铺的 dev」有意义；生产构建在 CI 任意分支都该能跑，故 build 不加载（[check.ts:9-10](../src/plugins/check.ts)）。
 - **为什么 `enforce:'pre'`** —— 让校验在其它插件逻辑之前发生，尽早失败。
 - **为什么校验 `ctx.themePath` 而非插件仓库** —— 危险的是主题源码所在仓库的分支状态（它决定推往店铺的内容），所以校验对象是主题仓库。
 
 ## 边界 / 已知约束
 
-- 依赖主题是一个**独立 git 仓库**且存在 `.git/HEAD`；若主题不在 git 下或 `.git/HEAD` 缺失，`readFileSync` 会抛（非本插件的受控错误）。
-- detached HEAD 会被判为「分支不存在」而拒绝——这是有意从严。
+- 依赖主题是一个 **git 仓库**（普通仓库，或 `.git` 为文件的 linked worktree / submodule）；非 git 仓库 / `.git` 形态异常时抛**受控**的 `[shopify-theme]` 前缀错误，不再逃逸裸 `ENOENT`。
+- detached HEAD 会被判为「不在分支上」而拒绝——这是有意从严。
 - 仅前缀匹配，不校验远端、不校验工作区是否干净。

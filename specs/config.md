@@ -6,15 +6,15 @@
 
 两件事，分属两层：
 
-1. **工厂 `shopifyTheme(options)`**（[index.ts:22](../src/index.ts)）—— 只做装配：经 `DEFAULTS` 合并补行为类选项默认、`setDebug` 设 debug 开关、创建空 `Ctx`、按固定顺序返回四个插件。不触碰文件系统、**不读 `process.env`**。
-2. **`shopify-theme:config` 插件的 `config` 钩子**（[config.ts:15-45](../src/plugins/config.ts)）—— 真正解析：定位主题路径、校验必填、补 `snippet` 默认、一次性填满 `Ctx`、返回机制必需的 `build` 配置。
+1. **工厂 `shopifyTheme(options)`**（[index.ts:22](../src/index.ts)）—— 只做装配：经 `DEFAULTS` 合并补全部选项默认、`setDebug` 设 debug 开关、创建空 `Ctx`、按固定顺序返回四个插件。不触碰文件系统、**不读 `process.env`**。
+2. **`shopify-theme:config` 插件的 `config` 钩子**（[config.ts:15-45](../src/plugins/config.ts)）—— 真正解析：定位主题路径、校验必填、派生 `root`、一次性填满 `Ctx`、返回机制必需的 `build` 配置。
 
 ## 时机
 
 | 阶段 | 何处 | 行为 |
 | --- | --- | --- |
-| 工厂调用 | `plugins: [shopifyTheme(...)]` 求值时 | 经 `DEFAULTS` 合并补 `devBranches`/`reload`/`debug` 默认（[index.ts:14-24](../src/index.ts)），返回插件数组 |
-| `config` 钩子 | Vite 启动最早期（dev/build 都跑） | 解析并填 `Ctx`（含 `snippet` 默认 `vite-mixer.liquid`），返回 `{ build }` |
+| 工厂调用 | `plugins: [shopifyTheme(...)]` 求值时 | 经 `DEFAULTS` 合并补 `snippet`/`devBranches`/`reload`/`debug` 默认（[index.ts:14-25](../src/index.ts)），返回插件数组 |
+| `config` 钩子 | Vite 启动最早期（dev/build 都跑） | 解析并填 `Ctx`（`root` 从 `config.root` 派生），返回 `{ build }` |
 
 `config` 是注入 `build` 配置、并在下游 `check`/`reload`/`mixer` 读 `Ctx` 前填满它的最早时机——这是把主题路径解析与必填校验放在 `config` 插件（而非完全在工厂体）的原因（[config.ts:16-24](../src/plugins/config.ts)）。注：本插件不读 `process.env`，故无 `loadEnv`，解析不依赖 `mode`。
 

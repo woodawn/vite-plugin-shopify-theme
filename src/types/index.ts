@@ -1,6 +1,5 @@
-// 工厂内共享态：由 shopify-theme:config 插件的 config 钩子填充，
-// 在 check / reload / mixer 各自的后续钩子（buildStart / configureServer / generateBundle）中读取。
-// config 钩子先于这些钩子运行，故读取时一定已就绪。
+// 工厂内共享态：由 :config 的 config 钩子填充，check / reload / mixer 的后续钩子读取。
+// config 先于这些钩子运行，故读取时必已就绪。
 export interface Ctx {
   /** 项目根（含 vite.config.ts、src/） */
   root: string;
@@ -24,11 +23,11 @@ export interface ShopifyThemeOptions {
   devBranches?: string[] | false;
   /** 额外整页 reload 的目录（相对 root） */
   reload?: string[];
-  /** 开启 debug 日志；默认 false（由宿主决定，经参数传入，不读 process.env.DEBUG） */
+  /** 开启 debug 日志；默认 false（经参数传入，不读 process.env） */
   debug?: boolean;
 }
 
-// 工厂合并 DEFAULTS 后的选项：被默认值覆盖的字段（devBranches / reload / debug）由可选转为必有，
-// 其余保持可选。统一传给 config / check / reload / mixer 四个子插件，由各插件按需取用（见 ../index.ts）。
+// 工厂合并 DEFAULTS 后的选项：被默认值覆盖的字段（snippet / devBranches / reload / debug）转为必有，
+// 其余仍可选。统一传给四个子插件按需取用（见 ../index.ts）。
 export type ResolvedOptions = ShopifyThemeOptions &
-  Required<Pick<ShopifyThemeOptions, "devBranches" | "reload" | "debug">>;
+  Required<Pick<ShopifyThemeOptions, "snippet" | "devBranches" | "reload" | "debug">>;

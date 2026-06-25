@@ -5,33 +5,30 @@ import { createLog } from "../utils/log";
 
 const log = createLog("config");
 
-// config 钩子：解析选项、定位主题路径、填满 Ctx，注入机制必需的 build 配置。
-// 这一步必须早于 check/reload/mixer 的钩子（它们只读 Ctx），config 正是最早的时机。
-// 注意：Vite 在运行 config 钩子前已解析完用户插件，故不能在此注入其它插件——
-// 插件本身由工厂（index.ts）直接返回。
+// config 钩子：解析选项、定位主题、填满 Ctx，并注入机制必需的 build 配置。
+// 是最早的钩子，故早于只读 Ctx 的 check/reload/mixer。
+// 注：Vite 此前已解析完用户插件，无法在此再注入插件——插件由工厂（index.ts）直接返回。
 export default function config(ctx: Ctx, opts: ResolvedOptions): Plugin {
   return {
     name: "shopify-theme:config",
     config(viteConfig) {
-      // root 跟随 Vite 自身的 config.root（缺省回退 cwd），与宿主 vite.config 单一来源，
-      // 不再单设 option；仅用于解析 entry / 额外 reload 目录 / 日志相对路径。
+      // root 跟随 Vite 的 config.root（缺省回退 cwd），与宿主单一来源、不另设 option；
+      // 仅用于解析 entry、额外 reload 目录、日志相对路径。
       const root = resolve(viteConfig.root ?? process.cwd());
       const themePath = required(opts.themePath, "themePath");
       const entry = required(opts.entry, "entry");
 
-      const snippet = opts.snippet ?? "vite-mixer.liquid";
-
-      Object.assign(ctx, { root, themePath, entry, snippet } satisfies Ctx);
+      // snippet 已由工厂 DEFAULTS 补齐，此处直接读。
+      Object.assign(ctx, { root, themePath, entry, snippet: opts.snippet } satisfies Ctx);
       log.debug("resolved", ctx);
 
-      // resolve.alias 与 server 由外层 vite.config 掌控（见根 vite.config.ts）；
-      // 本插件只注入主题路径派生 / 机制必需的 build 配置。
+      // alias / server 由外层 vite.config 掌控；此处只注入主题路径派生、机制必需的 build。
       return {
         build: {
           outDir: join(themePath, "assets"),
           emptyOutDir: false,
           minify: false,
-          // 无需 manifest：:mixer 改从 generateBundle 的 bundle 元数据读取 entry/CSS
+          // 无需 manifest：:mixer 从 generateBundle 的 bundle 元数据直接读 entry/CSS。
           rolldownOptions: {
             input: { "vite-mixer": join(root, entry) },
             output: {
@@ -46,8 +43,8 @@ export default function config(ctx: Ctx, opts: ResolvedOptions): Plugin {
   };
 }
 
-// 必填选项校验：缺失即抛出统一格式错误，中止启动。
+// 必填选项校验：缺失即抛统一格式错误。
 function required(value: string | undefined, name: string): string {
-  if (!value) throw new Error(`[shopify-theme] ${name} 未设置：请传 options.${name}。`);
+  if (!value) throw new Error(`[shopify-theme] missing required option: ${name}. Pass options.${name}.`);
   return value;
 }

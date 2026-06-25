@@ -4,9 +4,8 @@ import pc from "picocolors";
 // 共享一个 Vite Logger，输出风格（时间戳、颜色、清屏处理）与 dev server 一致
 const logger = createLogger();
 
-// Vite 的 Logger 没有 debug 档（只有 info / warn / error），用一个模块级开关充当
-// "debug 级别"：默认静默，由工厂 shopifyTheme(options.debug) 经 setDebug 设定。
-// 不读 process.env——开关来源单一，由宿主以参数传入。
+// Vite Logger 无 debug 档（仅 info / warn / error），用模块级开关充当：默认静默，
+// 由工厂 shopifyTheme(options.debug) 经 setDebug 设定，不读 process.env（来源单一）。
 let debugFlag = false;
 
 export function setDebug(enabled: boolean): void {
