@@ -1,0 +1,33 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # 供 npm provenance 使用
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # 按 viteplus.dev/guide/ci 推荐：setup-vp 安装 Vite+、Node，并自动 vp install。
+      # registry-url 让它写好发布鉴权用的 .npmrc（配合下方 NODE_AUTH_TOKEN）。
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          # 省略 node-version → setup-vp 默认使用最新 LTS
+          registry-url: https://registry.npmjs.org
+
+      # 用 vp 的运行器构建 dist（本包构建走 obuild；npm 的脚本运行器
+      # 在 pnpm 的 node_modules 布局里解析不到 obuild）。
+      - run: vp run build
+
+      # vp 无 publish 子命令；dist 已构建，故 npm publish 跳过生命周期脚本。
+      - name: Publish
+        run: npm publish --ignore-scripts --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
