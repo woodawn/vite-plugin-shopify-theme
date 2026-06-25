@@ -26,11 +26,13 @@ jobs:
       # 在 pnpm 的 node_modules 布局里解析不到 obuild）。
       - run: vp run build
 
-      # 用 pnpm 发布：vp install 会向 package.json 注入 devEngines.packageManager=pnpm
-      # 钉死工具链，此后 npm publish 会因 PM 不符报 EBADDEVENGINES，故须用 pnpm。
-      # --no-git-checks：release tag 触发时处于 detached HEAD，跳过分支/干净度校验。
-      # dist 已由上一步 vp run build 构建，故 --ignore-scripts 跳过生命周期脚本。
+      # vp install 会向 package.json 注入 devEngines.packageManager=pnpm 钉死工具链，
+      # 使后续 npm publish 报 EBADDEVENGINES；而 vp 不把 pnpm 暴露到 PATH（无 vp publish）。
+      # 故发布前用 node 剥掉这个仅供开发期的字段（不入库，仅改 runner 工作副本），
+      # 再用 npm（PATH 上确有）发布。dist 已由 vp run build 构建，--ignore-scripts 跳过生命周期脚本。
       - name: Publish
-        run: pnpm publish --no-git-checks --ignore-scripts --provenance --access public
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));delete p.devEngines;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+          npm publish --ignore-scripts --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
