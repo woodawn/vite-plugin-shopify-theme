@@ -22,7 +22,10 @@ export default function mixer(ctx: Ctx, _opts: ResolvedOptions): Plugin {
   // 写出 snippet = prefix + 各 tag + dev_mode 尾。dev/build 共用此信封，
   // 仅差 prefix（build 带 disclaimer）与 dev_mode 真假。
   const writeSnippet = (tags: string[], devMode: boolean, prefix = ""): void => {
-    writeFileSync(snippetPath(), prefix + tags.join("\n") + `\n{% liquid\n  assign dev_mode = ${devMode}\n%}`);
+    writeFileSync(
+      snippetPath(),
+      prefix + tags.join("\n") + `\n{% liquid\n  assign dev_mode = ${devMode}\n%}`,
+    );
   };
 
   return {
@@ -31,6 +34,7 @@ export default function mixer(ctx: Ctx, _opts: ResolvedOptions): Plugin {
 
     configureServer(server) {
       server.httpServer?.once("listening", () => {
+        log.debug("dev server", server.httpServer?.address());
         // 端口、主机名都取自实际监听地址：端口源自 vite.config 的 server.port；
         // 主机名见 devHost（wildcard 时取 LAN IP，便于手机 / 局域网预览）。
         const addr = server.httpServer?.address();
@@ -41,10 +45,7 @@ export default function mixer(ctx: Ctx, _opts: ResolvedOptions): Plugin {
         // 单入口（ctx.entry，已是 root 相对、正斜杠），dev script 直接用；多入口待 entry 收多值。
         // /@vite/client 必须显式注入（Vite backend-integration 约定）：full-reload 与 HMR
         // 的 WebSocket 全靠它建立，不能指望 entry 模块图里恰好传递性加载了 client。
-        const tags = [
-          devScriptTag(origin, "@vite/client"),
-          devScriptTag(origin, ctx.entry),
-        ];
+        const tags = [devScriptTag(origin, "@vite/client"), devScriptTag(origin, ctx.entry)];
         log.debug("dev snippet ->", snippetPath());
         writeSnippet(tags, true);
       });
@@ -88,17 +89,33 @@ function devScriptTag(origin: string, path: string): string {
   return `<script src="${origin}/${path}" type="module"></script>`;
 }
 
+// 隧道 / 虚拟网卡前缀：它们的地址（如 utun666 的 172.19.0.1、容器网桥的 172.x）
+// 局域网与手机均不可达，选物理网卡前先排除，避免 dev 预览 URL 指向 VPN / 容器网络。
+const VIRTUAL_IFACE =
+  /^(utun|awdl|llw|bridge|docker|br-|veth|tun|tap|vboxnet|vmnet|vmenet|gif|stf|ap\d|zt|tailscale|wg|ipsec|ppp)/i;
+
 // 由监听地址推导 dev URL 主机名：
 // - 未知 / 回环 → localhost
-// - wildcard（0.0.0.0 / ::）→ 第一个非内部 IPv4（LAN / 手机可达），找不到回退 localhost
+// - wildcard（0.0.0.0 / ::）→ 物理网卡 IPv4（en0 优先，LAN / 手机可达），找不到回退 localhost
 // - 具体地址 → 原样使用
 function devHost(address: string | undefined): string {
   if (!address || address === "127.0.0.1" || address === "::1") return "localhost";
   if (address !== "0.0.0.0" && address !== "::") return address;
-  for (const infos of Object.values(networkInterfaces())) {
+  return lanIPv4() ?? "localhost";
+}
+
+// 选局域网可达的 IPv4：先排除隧道 / 虚拟网卡，再按 en0 > 其他 en* / eth* > 余下排序。
+// macOS 上 VPN 的 utun 常排在 en0 之前，朴素「取第一个非内部 IPv4」会误选其 172.x 地址。
+function lanIPv4(): string | undefined {
+  const candidates: { name: string; address: string }[] = [];
+  for (const [name, infos] of Object.entries(networkInterfaces())) {
+    if (VIRTUAL_IFACE.test(name)) continue;
     for (const info of infos ?? []) {
-      if (info.family === "IPv4" && !info.internal) return info.address;
+      if (info.family === "IPv4" && !info.internal) candidates.push({ name, address: info.address });
     }
   }
-  return "localhost";
+  const rank = (name: string): number =>
+    /^en0$/i.test(name) ? 0 : /^(en|eth)\d+$/i.test(name) ? 1 : 2;
+  candidates.sort((a, b) => rank(a.name) - rank(b.name));
+  return candidates[0]?.address;
 }
